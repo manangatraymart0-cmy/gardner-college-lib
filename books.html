@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Books - BOOKLIB</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="dashboard">
+<div class="sidebar">
+<div class="brand"><div class="small-logo">B</div><div><h2>BOOKLIB</h2><p>Library System</p></div></div>
+<div class="navigation">
+<p class="nav-title">MAIN MENU</p>
+<a href="dashboard.html" class="nav-link">Dashboard</a>
+<a href="books.html" class="nav-link active">Books</a>
+<a href="borrow.html" class="nav-link">Borrow Books</a>
+<a href="borrowed.html" class="nav-link">My Borrowed Books</a>
+<a href="history.html" class="nav-link">Borrowing History</a>
+
+<p class="nav-title">ACCOUNT</p>
+<a href="profile.html" class="nav-link">My Profile</a>
+<p class="nav-title admin-only">ADMIN</p>
+<a href="admin.html" class="nav-link admin-only">Admin Panel</a>
+</div>
+<div class="sidebar-bottom"><a href="index.html" class="logout" onclick="logout(); return false;">Log Out</a></div>
+</div>
+<div class="content">
+<div class="top">
+<div><h1>Books</h1><p>Browse the books available in the library.</p></div>
+<div class="profile"><div class="profile-picture">..</div><div><strong>Loading...</strong><p></p></div></div>
+</div>
+
+<div class="search-area"><div><h2>Find a Book</h2><p>Search for a book by title, author or category.</p></div>
+<div class="search"><input type="text" id="q" placeholder="Search by title or author"><button id="qBtn">Search</button></div></div>
+<div class="section"><div class="section-header"><div><h2>Library Books</h2><p>All books in the library catalog.</p></div></div>
+<div class="book-table-container"><table class="book-table"><thead><tr><th>Book ID</th><th>Book Title</th><th>Author</th><th>Category</th><th>Available Copies</th><th>Status</th><th>Action</th></tr></thead><tbody id="rows"></tbody></table></div></div>
+</div>
+</div>
+<script type="module">
+import { protectPage } from "./auth.js";
+import { $, el, fillTable, fmt, shortId, loanState, loanBadge, stockBadge, getBooks, getMyLoans, getAllLoans, borrowAndReport, returnLoan, RULES } from "./library.js";
+const profile = await protectPage(false);
+
+let books = [];
+function render() {
+    const q = $("q").value.toLowerCase();
+    fillTable($("rows"), books.filter(b => (b.title + " " + b.author + " " + (b.category || "")).toLowerCase().includes(q)).map(b => {
+        const btn = el("button", b.availableCopies > 0 ? "Borrow" : "Unavailable", "borrow-button");
+        btn.disabled = b.availableCopies < 1;
+        btn.onclick = async () => { if (await borrowAndReport(b, profile)) load(); };
+        return [shortId(b.id), b.title, b.author, b.category || "---", b.availableCopies + " / " + b.totalCopies, stockBadge(b), btn];
+    }), "No books found. The librarian can add books in the Admin Panel.");
+}
+async function load() { books = await getBooks(); render(); }
+$("q").oninput = render; $("qBtn").onclick = render;
+load();
+
+</script>
+</body>
+</html>

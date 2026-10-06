@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Borrow Books - BOOKLIB</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="dashboard">
+<div class="sidebar">
+<div class="brand"><div class="small-logo">B</div><div><h2>BOOKLIB</h2><p>Library System</p></div></div>
+<div class="navigation">
+<p class="nav-title">MAIN MENU</p>
+<a href="dashboard.html" class="nav-link">Dashboard</a>
+<a href="books.html" class="nav-link">Books</a>
+<a href="borrow.html" class="nav-link active">Borrow Books</a>
+<a href="borrowed.html" class="nav-link">My Borrowed Books</a>
+<a href="history.html" class="nav-link">Borrowing History</a>
+
+<p class="nav-title">ACCOUNT</p>
+<a href="profile.html" class="nav-link">My Profile</a>
+<p class="nav-title admin-only">ADMIN</p>
+<a href="admin.html" class="nav-link admin-only">Admin Panel</a>
+</div>
+<div class="sidebar-bottom"><a href="index.html" class="logout" onclick="logout(); return false;">Log Out</a></div>
+</div>
+<div class="content">
+<div class="top">
+<div><h1>Borrow Books</h1><p>Request a book from the library.</p></div>
+<div class="profile"><div class="profile-picture">..</div><div><strong>Loading...</strong><p></p></div></div>
+</div>
+
+<div class="borrow-notice"><div class="notice-icon">!</div><div><h3>Borrowing Information</h3>
+<p id="notice"></p></div></div>
+<div class="section"><div class="section-header"><div><h2>Borrowing Request</h2><p>Choose an available book and submit your request.</p></div></div>
+<form class="borrow-form" id="form">
+<div class="form-group"><label>Book Title</label><select id="pick"></select></div>
+<div class="form-group"><label>Book ID</label><input type="text" id="bid" disabled></div>
+<div class="form-group"><label>Author</label><input type="text" id="auth" disabled></div>
+<div class="form-group"><label>Borrowing Period</label><input type="text" id="period" disabled></div>
+<button class="request-button" type="submit">Submit Borrowing Request</button></form></div>
+<div class="section"><div class="section-header"><div><h2>Borrowing Rules</h2><p>Current library policies.</p></div></div>
+<div class="rules-list" id="rules"></div></div>
+
+</div>
+</div>
+<script type="module">
+import { protectPage } from "./auth.js";
+import { $, el, fillTable, fmt, shortId, loanState, loanBadge, stockBadge, getBooks, getMyLoans, getAllLoans, borrowAndReport, returnLoan, RULES } from "./library.js";
+const profile = await protectPage(false);
+
+let books = [];
+$("notice").textContent = "You may borrow up to " + RULES.maxBooks + " books for " + RULES.loanDays + " days each. (Rules pending final confirmation by the librarian.)";
+[["Maximum books allowed: " + RULES.maxBooks], ["Borrowing period: " + RULES.loanDays + " days"], ["Renewal policy: to be confirmed by the librarian"], ["Late return policy: to be confirmed by the librarian"]]
+  .forEach((r, i) => { const d = el("div", null, "rule-item"); d.append(el("span", "0" + (i + 1)), el("p", r[0])); $("rules").append(d); });
+$("period").value = RULES.loanDays + " days";
+function show() {
+    const b = books.find(x => x.id === $("pick").value);
+    $("bid").value = b ? shortId(b.id) : ""; $("auth").value = b ? b.author : "";
+}
+async function load() {
+    books = (await getBooks()).filter(b => b.availableCopies > 0);
+    const sel = $("pick"); sel.replaceChildren();
+    if (!books.length) { const o = el("option", "No books available"); o.value = ""; sel.append(o); }
+    books.forEach(b => { const o = el("option", b.title + " - " + b.author); o.value = b.id; sel.append(o); });
+    show();
+}
+$("pick").onchange = show;
+$("form").onsubmit = async e => {
+    e.preventDefault();
+    const b = books.find(x => x.id === $("pick").value);
+    if (!b) { alert("Please choose a book."); return; }
+    if (await borrowAndReport(b, profile)) load();
+};
+load();
+
+</script>
+</body>
+</html>

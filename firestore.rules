@@ -1,0 +1,78 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return signedIn() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // ---------- ACCOUNTS ----------
+    match /users/{uid} {
+
+      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+
+      // New accounts can only ever be created as "student".
+      allow create: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['fullname','studentid','username','email','role'])
+        && request.resource.data.role == 'student';
+
+      // Students: own full name only.
+      // Admins: full name, student ID and role of anyone (but never their own role).
+      allow update: if signedIn() && (
+        (request.auth.uid == uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fullname']))
+        ||
+        (isAdmin()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fullname','studentid','role'])
+          && !(request.auth.uid == uid
+               && request.resource.data.diff(resource.data).affectedKeys().hasAny(['role'])))
+      );
+
+      allow delete: if false;
+    }
+
+    // username -> email lookup so people can sign in by username.
+    match /usernames/{name} {
+      allow get: if true;
+      allow list: if false;
+      allow create: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.keys().hasOnly(['email','uid']);
+      allow update, delete: if false;
+    }
+
+    // ---------- BOOKS ----------
+    match /books/{bookId} {
+      allow read: if signedIn();
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin()
+        // a student borrowing takes exactly one copy
+        || (signedIn()
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['availableCopies'])
+            && request.resource.data.availableCopies == resource.data.availableCopies - 1
+            && request.resource.data.availableCopies >= 0);
+    }
+
+    // ---------- LOANS ----------
+    match /loans/{loanId} {
+      allow read: if signedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow create: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.status == 'borrowed'
+        && request.resource.data.keys().hasOnly(['uid','studentName','studentId','bookId','title','author','borrowedAt','dueAt','returnedAt','status']);
+      allow update: if isAdmin();   // marking a book as returned
+      allow delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

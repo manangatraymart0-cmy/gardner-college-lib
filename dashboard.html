@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard - BOOKLIB</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="dashboard">
+<div class="sidebar">
+<div class="brand"><div class="small-logo">B</div><div><h2>BOOKLIB</h2><p>Library System</p></div></div>
+<div class="navigation">
+<p class="nav-title">MAIN MENU</p>
+<a href="dashboard.html" class="nav-link active">Dashboard</a>
+<a href="books.html" class="nav-link">Books</a>
+<a href="borrow.html" class="nav-link">Borrow Books</a>
+<a href="borrowed.html" class="nav-link">My Borrowed Books</a>
+<a href="history.html" class="nav-link">Borrowing History</a>
+
+<p class="nav-title">ACCOUNT</p>
+<a href="profile.html" class="nav-link">My Profile</a>
+<p class="nav-title admin-only">ADMIN</p>
+<a href="admin.html" class="nav-link admin-only">Admin Panel</a>
+</div>
+<div class="sidebar-bottom"><a href="index.html" class="logout" onclick="logout(); return false;">Log Out</a></div>
+</div>
+<div class="content">
+<div class="top">
+<div><h1>Dashboard</h1><p>Welcome back! Here's what's happening in the library.</p></div>
+<div class="profile"><div class="profile-picture">..</div><div><strong>Loading...</strong><p></p></div></div>
+</div>
+
+<div class="statistics">
+<div class="stat-card"><p>Total Books</p><h2 id="sTotal">--</h2><span>Titles in library</span></div>
+<div class="stat-card"><p>Available Copies</p><h2 id="sAvail">--</h2><span>Ready to borrow</span></div>
+<div class="stat-card"><p>My Borrowed Books</p><h2 id="sMine">--</h2><span>Currently borrowed</span></div>
+<div class="stat-card"><p>Due Soon / Overdue</p><h2 id="sDue">--</h2><span>Needs attention</span></div>
+</div>
+<div class="search-area"><div><h2>Find a Book</h2><p>Search for books available in the library.</p></div>
+<div class="search"><input type="text" id="q" placeholder="Search by title or author"><button id="qBtn">Search</button></div></div>
+<div class="section"><div class="section-header"><div><h2>Available Books</h2><p>Books you can borrow right now</p></div><a href="books.html">View All Books</a></div>
+<div class="book-list" id="bookList"></div></div>
+<div class="section recent"><div class="section-header"><div><h2>Recent Borrowing</h2><p>Your latest book transactions</p></div><a href="history.html">View History</a></div>
+<table><thead><tr><th>Book Title</th><th>Date Borrowed</th><th>Due Date</th><th>Status</th></tr></thead><tbody id="recent"></tbody></table></div>
+
+</div>
+</div>
+<script type="module">
+import { protectPage } from "./auth.js";
+import { $, el, fillTable, fmt, shortId, loanState, loanBadge, stockBadge, getBooks, getMyLoans, getAllLoans, borrowAndReport, returnLoan, RULES } from "./library.js";
+const profile = await protectPage(false);
+
+let books = [], loans = [];
+function renderBooks() {
+    const q = $("q").value.toLowerCase(), box = $("bookList");
+    box.replaceChildren();
+    const list = books.filter(b => b.availableCopies > 0 && (b.title + " " + b.author).toLowerCase().includes(q)).slice(0, 8);
+    if (!list.length) { box.append(el("p", "No available books found.")); return; }
+    list.forEach(b => {
+        const card = el("div", null, "book-card"), foot = el("div", null, "book-footer"), btn = el("button", "Borrow");
+        btn.onclick = async () => { if (await borrowAndReport(b, profile)) load(); };
+        foot.append(stockBadge(b), btn);
+        card.append(el("div", "BOOK", "book-image"), el("h3", b.title), el("p", b.author), foot);
+        box.append(card);
+    });
+}
+async function load() {
+    [books, loans] = await Promise.all([getBooks(), getMyLoans(profile.uid)]);
+    const mine = loans.filter(l => l.status === "borrowed");
+    $("sTotal").textContent = books.length;
+    $("sAvail").textContent = books.reduce((n, b) => n + b.availableCopies, 0);
+    $("sMine").textContent = mine.length;
+    $("sDue").textContent = mine.filter(l => ["Due Soon", "Overdue"].includes(loanState(l))).length;
+    renderBooks();
+    fillTable($("recent"), loans.slice(0, 5).map(l => [l.title, fmt(l.borrowedAt), fmt(l.dueAt), loanBadge(l)]), "No borrowing yet.");
+}
+$("q").oninput = renderBooks; $("qBtn").onclick = renderBooks;
+load();
+
+</script>
+</body>
+</html>

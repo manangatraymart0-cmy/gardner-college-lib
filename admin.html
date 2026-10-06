@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin Panel - BOOKLIB</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="dashboard">
+<div class="sidebar">
+<div class="brand"><div class="small-logo">B</div><div><h2>BOOKLIB</h2><p>Library System</p></div></div>
+<div class="navigation">
+<p class="nav-title">MAIN MENU</p>
+<a href="dashboard.html" class="nav-link">Dashboard</a>
+<a href="books.html" class="nav-link">Books</a>
+<a href="borrow.html" class="nav-link">Borrow Books</a>
+<a href="borrowed.html" class="nav-link">My Borrowed Books</a>
+<a href="history.html" class="nav-link">Borrowing History</a>
+
+<p class="nav-title">ACCOUNT</p>
+<a href="profile.html" class="nav-link">My Profile</a>
+<p class="nav-title admin-only">ADMIN</p>
+<a href="admin.html" class="nav-link admin-only active">Admin Panel</a>
+</div>
+<div class="sidebar-bottom"><a href="index.html" class="logout" onclick="logout(); return false;">Log Out</a></div>
+</div>
+<div class="content">
+<div class="top">
+<div><h1>Admin Panel</h1><p>Manage accounts, books and loans.</p></div>
+<div class="profile"><div class="profile-picture">..</div><div><strong>Loading...</strong><p></p></div></div>
+</div>
+
+<div class="statistics">
+<div class="stat-card"><p>Student Accounts</p><h2 id="aUsers">--</h2><span>Registered</span></div>
+<div class="stat-card"><p>Book Titles</p><h2 id="aBooks">--</h2><span>In catalog</span></div>
+<div class="stat-card"><p>Active Loans</p><h2 id="aLoans">--</h2><span>Not yet returned</span></div>
+<div class="stat-card"><p>Overdue</p><h2 id="aOver">--</h2><span>Needs follow-up</span></div>
+</div>
+<div class="tabs"><button class="tab-btn active" data-tab="tUsers">Accounts</button><button class="tab-btn" data-tab="tBooks">Books</button><button class="tab-btn" data-tab="tLoans">Loans</button></div>
+
+<div class="section tab-panel" id="tUsers"><div class="section-header"><div><h2>All Accounts</h2><p>Edit wrong info, change roles, or send a password reset link.</p></div></div>
+<div class="toolbar"><input type="text" id="uq" placeholder="Search name, student ID, username or email"></div>
+<div class="book-table-container"><table class="book-table"><thead><tr><th>Full Name</th><th>Student ID</th><th>Username</th><th>Email</th><th>Role</th><th>Actions</th></tr></thead><tbody id="uRows"></tbody></table></div></div>
+
+<div class="section tab-panel" id="tBooks" style="display:none"><div class="section-header"><div><h2>Manage Books</h2><p>Add new books and update the catalog.</p></div></div>
+<div class="toolbar"><input id="bT" placeholder="Title"><input id="bA" placeholder="Author"><input id="bC" placeholder="Category"><input id="bN" type="number" min="1" placeholder="Copies"><button class="small-btn" id="bAdd">Add Book</button></div>
+<div class="book-table-container"><table class="book-table"><thead><tr><th>Book ID</th><th>Title</th><th>Author</th><th>Category</th><th>Copies (available / total)</th><th>Actions</th></tr></thead><tbody id="bRows"></tbody></table></div></div>
+
+<div class="section tab-panel" id="tLoans" style="display:none"><div class="section-header"><div><h2>All Loans</h2><p>Mark books as returned when students bring them back.</p></div></div>
+<div class="book-table-container"><table class="book-table"><thead><tr><th>Student</th><th>Book</th><th>Borrowed</th><th>Due</th><th>Returned</th><th>Status</th><th>Action</th></tr></thead><tbody id="lRows"></tbody></table></div></div>
+
+<div class="modal-bg" id="modal"><div class="modal"><h2 id="mTitle"></h2><div id="mFields"></div>
+<div class="modal-actions"><button class="small-btn ghost" id="mCancel">Cancel</button><button class="small-btn" id="mSave">Save</button></div></div></div>
+
+</div>
+</div>
+<script type="module">
+import { protectPage } from "./auth.js";
+import { $, el, fillTable, fmt, shortId, loanState, loanBadge, stockBadge, getBooks, getMyLoans, getAllLoans, borrowAndReport, returnLoan, RULES } from "./library.js";
+const profile = await protectPage(true);
+
+import { auth, db } from "./firebase-init.js";
+import { collection, getDocs, doc, updateDoc, addDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
+import { sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js";
+
+let users = [], books = [], loans = [];
+
+/* tabs */
+document.querySelectorAll(".tab-btn").forEach(b => b.onclick = () => {
+    document.querySelectorAll(".tab-btn").forEach(x => x.classList.toggle("active", x === b));
+    document.querySelectorAll(".tab-panel").forEach(p => p.style.display = p.id === b.dataset.tab ? "" : "none");
+});
+
+/* generic edit window */
+function openModal(title, fields, onSave) {
+    $("mTitle").textContent = title;
+    const box = $("mFields"), inputs = {};
+    box.replaceChildren();
+    fields.forEach(f => {
+        let inp;
+        if (f.options) { inp = document.createElement("select"); f.options.forEach(o => { const op = el("option", o); op.value = o; inp.append(op); }); }
+        else { inp = document.createElement("input"); inp.type = f.type || "text"; }
+        inp.value = f.value == null ? "" : f.value;
+        inp.disabled = !!f.readonly;
+        inputs[f.key] = inp;
+        box.append(el("label", f.label), inp);
+    });
+    $("modal").style.display = "flex";
+    $("mSave").onclick = async () => {
+        const vals = {};
+        for (const k in inputs) vals[k] = inputs[k].value.trim();
+        try { await onSave(vals); $("modal").style.display = "none"; }
+        catch (e) { alert("Could not save: " + e.message); }
+    };
+}
+$("mCancel").onclick = () => $("modal").style.display = "none";
+
+function stats() {
+    $("aUsers").textContent = users.filter(u => u.role !== "admin").length;
+    $("aBooks").textContent = books.length;
+    $("aLoans").textContent = loans.filter(l => l.status === "borrowed").length;
+    $("aOver").textContent = loans.filter(l => loanState(l) === "Overdue").length;
+}
+
+/* ACCOUNTS */
+function renderUsers() {
+    const q = $("uq").value.toLowerCase();
+    fillTable($("uRows"), users.filter(u => [u.fullname, u.studentid, u.username, u.email].join(" ").toLowerCase().includes(q)).map(u => {
+        const edit = el("button", "Edit", "small-btn"), reset = el("button", "Send password reset", "small-btn ghost"), box = el("span");
+        edit.onclick = () => openModal("Edit account", [
+            { key: "fullname", label: "Full name", value: u.fullname },
+            { key: "studentid", label: "Student ID", value: u.studentid },
+            { key: "username", label: "Username (cannot be changed)", value: u.username, readonly: true },
+            { key: "email", label: "Email (cannot be changed here)", value: u.email, readonly: true },
+            { key: "role", label: u.uid === profile.uid ? "Role (you cannot change your own)" : "Role", value: u.role, options: ["student", "admin"], readonly: u.uid === profile.uid }
+        ], async v => {
+            if (!v.fullname) throw new Error("Full name cannot be empty.");
+            const change = { fullname: v.fullname, studentid: v.studentid };
+            if (u.uid !== profile.uid && v.role !== u.role) change.role = v.role;
+            await updateDoc(doc(db, "users", u.uid), change);
+            await load();
+        });
+        reset.onclick = async () => {
+            if (!confirm("Send a password reset email to " + u.email + "?")) return;
+            try { await sendPasswordResetEmail(auth, u.email); alert("Reset link sent to " + u.email + "."); }
+            catch (e) { alert("Could not send: " + e.message); }
+        };
+        box.append(edit, reset);
+        return [u.fullname || "---", u.studentid || "---", u.username, u.email, u.role === "admin" ? "Admin" : "Student", box];
+    }), "No accounts found.");
+}
+$("uq").oninput = renderUsers;
+
+/* BOOKS */
+function renderBooks() {
+    fillTable($("bRows"), books.map(b => {
+        const edit = el("button", "Edit", "small-btn"), del = el("button", "Delete", "small-btn danger"), box = el("span");
+        edit.onclick = () => openModal("Edit book", [
+            { key: "title", label: "Title", value: b.title }, { key: "author", label: "Author", value: b.author },
+            { key: "category", label: "Category", value: b.category }, { key: "total", label: "Total copies", value: b.totalCopies, type: "number" }
+        ], async v => {
+            const total = parseInt(v.total, 10), out = b.totalCopies - b.availableCopies;
+            if (!v.title || !v.author) throw new Error("Title and author are required.");
+            if (!(total >= out && total >= 0)) throw new Error(out + " copies are currently borrowed, so total cannot be lower than that.");
+            await updateDoc(doc(db, "books", b.id), { title: v.title, author: v.author, category: v.category, totalCopies: total, availableCopies: total - out });
+            await load();
+        });
+        del.onclick = async () => {
+            if (b.availableCopies < b.totalCopies) { alert("Some copies are still borrowed. Mark them returned first."); return; }
+            if (!confirm('Delete "' + b.title + '"?')) return;
+            await deleteDoc(doc(db, "books", b.id)); await load();
+        };
+        box.append(edit, del);
+        return [shortId(b.id), b.title, b.author, b.category || "---", b.availableCopies + " / " + b.totalCopies, box];
+    }), "No books yet. Add the first one above.");
+}
+$("bAdd").onclick = async () => {
+    const title = $("bT").value.trim(), author = $("bA").value.trim(), n = parseInt($("bN").value, 10);
+    if (!title || !author || !(n >= 1)) { alert("Please enter a title, an author and at least 1 copy."); return; }
+    try {
+        await addDoc(collection(db, "books"), { title, author, category: $("bC").value.trim(), totalCopies: n, availableCopies: n });
+        ["bT", "bA", "bC", "bN"].forEach(i => $(i).value = "");
+        await load();
+    } catch (e) { alert("Could not add book: " + e.message); }
+};
+
+/* LOANS */
+function renderLoans() {
+    fillTable($("lRows"), loans.map(l => {
+        let act = "";
+        if (l.status === "borrowed") {
+            act = el("button", "Mark returned", "small-btn");
+            act.onclick = async () => {
+                if (!confirm('Mark "' + l.title + '" as returned by ' + l.studentName + "?")) return;
+                try { await returnLoan(l); await load(); } catch (e) { alert(e.message); }
+            };
+        }
+        return [l.studentName + (l.studentId ? " (" + l.studentId + ")" : ""), l.title, fmt(l.borrowedAt), fmt(l.dueAt), fmt(l.returnedAt), loanBadge(l), act];
+    }), "No loans yet.");
+}
+
+async function load() {
+    const [u, b, l] = await Promise.all([getDocs(collection(db, "users")), getBooks(), getAllLoans()]);
+    users = u.docs.map(d => ({ uid: d.id, ...d.data() })).sort((a, c) => (a.fullname || "").localeCompare(c.fullname || ""));
+    books = b; loans = l;
+    stats(); renderUsers(); renderBooks(); renderLoans();
+}
+load();
+
+</script>
+</body>
+</html>

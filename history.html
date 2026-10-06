@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Borrowing History - BOOKLIB</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="dashboard">
+<div class="sidebar">
+<div class="brand"><div class="small-logo">B</div><div><h2>BOOKLIB</h2><p>Library System</p></div></div>
+<div class="navigation">
+<p class="nav-title">MAIN MENU</p>
+<a href="dashboard.html" class="nav-link">Dashboard</a>
+<a href="books.html" class="nav-link">Books</a>
+<a href="borrow.html" class="nav-link">Borrow Books</a>
+<a href="borrowed.html" class="nav-link">My Borrowed Books</a>
+<a href="history.html" class="nav-link active">Borrowing History</a>
+
+<p class="nav-title">ACCOUNT</p>
+<a href="profile.html" class="nav-link">My Profile</a>
+<p class="nav-title admin-only">ADMIN</p>
+<a href="admin.html" class="nav-link admin-only">Admin Panel</a>
+</div>
+<div class="sidebar-bottom"><a href="index.html" class="logout" onclick="logout(); return false;">Log Out</a></div>
+</div>
+<div class="content">
+<div class="top">
+<div><h1>Borrowing History</h1><p>View your previous library transactions.</p></div>
+<div class="profile"><div class="profile-picture">..</div><div><strong>Loading...</strong><p></p></div></div>
+</div>
+
+<div class="section"><div class="section-header"><div><h2>My Borrowing History</h2><p>All books you have borrowed from the library.</p></div></div>
+<div class="book-table-container"><table class="book-table"><thead><tr><th>Transaction ID</th><th>Book Title</th><th>Date Borrowed</th><th>Due Date</th><th>Date Returned</th><th>Status</th></tr></thead><tbody id="rows"></tbody></table></div></div>
+<div class="history-summary">
+<div class="history-summary-card"><p>Total Borrowed</p><h2 id="h1">--</h2><span>Books borrowed</span></div>
+<div class="history-summary-card"><p>Total Returned</p><h2 id="h2">--</h2><span>Books returned</span></div>
+<div class="history-summary-card"><p>Currently Borrowed</p><h2 id="h3">--</h2><span>Books not yet returned</span></div>
+<div class="history-summary-card"><p>Overdue</p><h2 id="h4">--</h2><span>Needs attention</span></div>
+</div>
+</div>
+</div>
+<script type="module">
+import { protectPage } from "./auth.js";
+import { $, el, fillTable, fmt, shortId, loanState, loanBadge, stockBadge, getBooks, getMyLoans, getAllLoans, borrowAndReport, returnLoan, RULES } from "./library.js";
+const profile = await protectPage(false);
+
+const loans = await getMyLoans(profile.uid);
+$("h1").textContent = loans.length;
+$("h2").textContent = loans.filter(l => l.status === "returned").length;
+$("h3").textContent = loans.filter(l => l.status === "borrowed").length;
+$("h4").textContent = loans.filter(l => loanState(l) === "Overdue").length;
+fillTable($("rows"), loans.map(l => [shortId(l.id), l.title, fmt(l.borrowedAt), fmt(l.dueAt), fmt(l.returnedAt), loanBadge(l)]), "No borrowing records yet.");
+
+</script>
+</body>
+</html>

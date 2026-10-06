@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>My Borrowed Books - BOOKLIB</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="dashboard">
+<div class="sidebar">
+<div class="brand"><div class="small-logo">B</div><div><h2>BOOKLIB</h2><p>Library System</p></div></div>
+<div class="navigation">
+<p class="nav-title">MAIN MENU</p>
+<a href="dashboard.html" class="nav-link">Dashboard</a>
+<a href="books.html" class="nav-link">Books</a>
+<a href="borrow.html" class="nav-link">Borrow Books</a>
+<a href="borrowed.html" class="nav-link active">My Borrowed Books</a>
+<a href="history.html" class="nav-link">Borrowing History</a>
+
+<p class="nav-title">ACCOUNT</p>
+<a href="profile.html" class="nav-link">My Profile</a>
+<p class="nav-title admin-only">ADMIN</p>
+<a href="admin.html" class="nav-link admin-only">Admin Panel</a>
+</div>
+<div class="sidebar-bottom"><a href="index.html" class="logout" onclick="logout(); return false;">Log Out</a></div>
+</div>
+<div class="content">
+<div class="top">
+<div><h1>My Borrowed Books</h1><p>View the books you currently borrowed.</p></div>
+<div class="profile"><div class="profile-picture">..</div><div><strong>Loading...</strong><p></p></div></div>
+</div>
+
+<div class="borrow-summary">
+<div class="summary-card"><div class="summary-icon">&#128218;</div><div><h3 id="c1">0</h3><p>Currently Borrowed</p></div></div>
+<div class="summary-card"><div class="summary-icon">&#128197;</div><div><h3 id="c2">0</h3><p>Due Soon</p></div></div>
+<div class="summary-card"><div class="summary-icon">&#9888;</div><div><h3 id="c3">0</h3><p>Overdue</p></div></div>
+</div>
+<div class="section"><div class="section-header"><div><h2>Currently Borrowed</h2><p>Return books to the librarian by the due date.</p></div><a href="borrow.html">Borrow a book</a></div>
+<div class="book-table-container"><table class="book-table"><thead><tr><th>Book Title</th><th>Author</th><th>Date Borrowed</th><th>Due Date</th><th>Status</th></tr></thead><tbody id="rows"></tbody></table></div></div>
+</div>
+</div>
+<script type="module">
+import { protectPage } from "./auth.js";
+import { $, el, fillTable, fmt, shortId, loanState, loanBadge, stockBadge, getBooks, getMyLoans, getAllLoans, borrowAndReport, returnLoan, RULES } from "./library.js";
+const profile = await protectPage(false);
+
+const loans = (await getMyLoans(profile.uid)).filter(l => l.status === "borrowed");
+const st = loans.map(loanState);
+$("c1").textContent = loans.length;
+$("c2").textContent = st.filter(s => s === "Due Soon").length;
+$("c3").textContent = st.filter(s => s === "Overdue").length;
+fillTable($("rows"), loans.map(l => [l.title, l.author, fmt(l.borrowedAt), fmt(l.dueAt), loanBadge(l)]), "You currently don't have any borrowed books.");
+
+</script>
+</body>
+</html>
